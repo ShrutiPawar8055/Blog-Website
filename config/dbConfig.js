@@ -41,24 +41,31 @@ const pool = mysql.createPool({
   waitForConnections: true,
   connectionLimit: Number(firstDefined('DB_CONNECTION_LIMIT') || 10),
   queueLimit: 0,
-  // keep idle connections alive
   enableKeepAlive: true,
   keepAliveInitialDelay: 10000,
   charset: 'utf8mb4',
-  // only set when TLS is enabled
   ...(sslOptions ? { ssl: sslOptions } : {})
 });
 
 const promisePool = pool.promise();
 
-// boot probe: resolves once a connection succeeds
-promisePool.testConnection = async function testConnection() {
+/**
+ * boot probe: resolves once a connection succeeds
+ * @returns {Promise<void>}
+ */
+async function testConnection() {
   const connection = await promisePool.getConnection();
   try {
     await connection.query('SELECT 1');
   } finally {
     connection.release();
   }
-};
+}
 
-module.exports = promisePool;
+module.exports = {
+  ...promisePool,
+  execute: promisePool.execute.bind(promisePool),
+  query: promisePool.query.bind(promisePool),
+  getConnection: promisePool.getConnection.bind(promisePool),
+  testConnection
+};

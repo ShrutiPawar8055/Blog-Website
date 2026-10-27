@@ -4,7 +4,7 @@ const { toPositiveInt } = require('../middleware/validate');
 
 // Like endpoints; liker id comes from the session.
 
-// Returns like count and users for an article.
+/** @type {import('express').RequestHandler} */
 exports.getLikesByArticle = async (req, res) => {
   try {
     const articleId = toPositiveInt(req.params.articleId);
@@ -24,7 +24,7 @@ exports.getLikesByArticle = async (req, res) => {
   }
 };
 
-// Toggles a like on an article (authenticated).
+/** @type {import('express').RequestHandler} */
 exports.toggleLike = async (req, res) => {
   try {
     const articleId = toPositiveInt(req.body.article_id);

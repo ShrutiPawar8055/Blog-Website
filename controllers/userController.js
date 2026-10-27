@@ -7,7 +7,7 @@ const { isValidEmail, isValidUsername, isValidPassword, toPositiveInt } = requir
 const BCRYPT_ROUNDS = Number(process.env.BCRYPT_ROUNDS || 10);
 const ASSIGNABLE_ROLES = ['user', 'author', 'admin'];
 
-// Lists all users (admin).
+/** @type {import('express').RequestHandler} */
 exports.getAllUsers = async (req, res) => {
   try {
     const users = await User.getAllUsers();
@@ -22,7 +22,7 @@ exports.getAllUsers = async (req, res) => {
   }
 };
 
-// Gets a user by id (self or admin).
+/** @type {import('express').RequestHandler} */
 exports.getUserById = async (req, res) => {
   try {
     const id = toPositiveInt(req.params.id);
@@ -41,7 +41,7 @@ exports.getUserById = async (req, res) => {
   }
 };
 
-// Creates a user (admin).
+/** @type {import('express').RequestHandler} */
 exports.createUser = async (req, res) => {
   try {
     const username = typeof req.body.username === 'string' ? req.body.username.trim() : '';
@@ -102,7 +102,7 @@ exports.createUser = async (req, res) => {
   }
 };
 
-// Updates a user's profile (self or admin).
+/** @type {import('express').RequestHandler} */
 exports.updateUser = async (req, res) => {
   try {
     const id = toPositiveInt(req.params.id);
@@ -138,7 +138,7 @@ exports.updateUser = async (req, res) => {
   }
 };
 
-// Changes a user's role (admin).
+/** @type {import('express').RequestHandler} */
 exports.updateUserRole = async (req, res) => {
   try {
     const id = toPositiveInt(req.params.id);
@@ -176,7 +176,7 @@ exports.updateUserRole = async (req, res) => {
   }
 };
 
-// Deletes a user (admin; cascades to their content).
+/** @type {import('express').RequestHandler} */
 exports.deleteUser = async (req, res) => {
   try {
     const id = toPositiveInt(req.params.id);

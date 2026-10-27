@@ -5,7 +5,7 @@ const { isOwnerOrAdmin } = require('../middleware/authMiddleware');
 
 // Comment endpoints; deletes are permission-checked.
 
-// Lists comments for an article.
+/** @type {import('express').RequestHandler} */
 exports.getCommentsByArticle = async (req, res) => {
   try {
     const articleId = toPositiveInt(req.params.articleId);
@@ -26,7 +26,7 @@ exports.getCommentsByArticle = async (req, res) => {
   }
 };
 
-// Adds a comment (authenticated).
+/** @type {import('express').RequestHandler} */
 exports.createComment = async (req, res) => {
   try {
     const articleId = toPositiveInt(req.body.article_id);
@@ -67,7 +67,7 @@ exports.createComment = async (req, res) => {
   }
 };
 
-// Deletes a comment (commenter, article author, or admin).
+/** @type {import('express').RequestHandler} */
 exports.deleteComment = async (req, res) => {
   try {
     const id = toPositiveInt(req.params.id);

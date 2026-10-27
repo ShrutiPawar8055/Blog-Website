@@ -60,7 +60,7 @@ function establishSession(req, res, user, statusCode, message) {
   });
 }
 
-// Returns the CSRF token for the current session.
+/** @type {import('express').RequestHandler} */
 exports.getCsrfToken = (req, res) => {
   res.status(200).json({
     success: true,
@@ -68,7 +68,7 @@ exports.getCsrfToken = (req, res) => {
   });
 };
 
-// Registers a new account and signs in.
+/** @type {import('express').RequestHandler} */
 exports.register = async (req, res) => {
   try {
     const username = typeof req.body.username === 'string' ? req.body.username.trim() : '';
@@ -130,7 +130,7 @@ exports.register = async (req, res) => {
   }
 };
 
-// Signs in with email and password.
+/** @type {import('express').RequestHandler} */
 exports.login = async (req, res) => {
   try {
     const email = typeof req.body.email === 'string' ? req.body.email.trim().toLowerCase() : '';
@@ -162,7 +162,7 @@ exports.login = async (req, res) => {
   }
 };
 
-// Signs out and destroys the session.
+/** @type {import('express').RequestHandler} */
 exports.logout = (req, res) => {
   req.session.destroy((error) => {
     if (error) console.error('Error destroying session:', error);
@@ -178,7 +178,7 @@ exports.logout = (req, res) => {
   });
 };
 
-// Returns the currently authenticated user.
+/** @type {import('express').RequestHandler} */
 exports.getCurrentUser = (req, res) => {
   if (!req.user) {
     return res.status(401).json({ success: false, error: 'Not authenticated.' });

@@ -4,7 +4,7 @@ const { isOwnerOrAdmin } = require('../middleware/authMiddleware');
 
 // Article controller: public reads, owner/admin writes.
 
-// Lists all articles (optional tag/date filters).
+/** @type {import('express').RequestHandler} */
 exports.getAllArticles = async (req, res) => {
   try {
     const filters = {
@@ -30,7 +30,7 @@ exports.getAllArticles = async (req, res) => {
   }
 };
 
-// Fetches one article by id.
+/** @type {import('express').RequestHandler} */
 exports.getArticleById = async (req, res) => {
   try {
     const id = toPositiveInt(req.params.id);
@@ -54,7 +54,7 @@ exports.getArticleById = async (req, res) => {
   }
 };
 
-// Creates an article (author or admin).
+/** @type {import('express').RequestHandler} */
 exports.createArticle = async (req, res) => {
   try {
     const title = typeof req.body.title === 'string' ? req.body.title.trim() : '';
@@ -119,7 +119,7 @@ exports.createArticle = async (req, res) => {
   }
 };
 
-// Updates an article (owner or admin).
+/** @type {import('express').RequestHandler} */
 exports.updateArticle = async (req, res) => {
   try {
     const id = toPositiveInt(req.params.id);
@@ -189,7 +189,7 @@ exports.updateArticle = async (req, res) => {
   }
 };
 
-// Deletes an article (owner or admin).
+/** @type {import('express').RequestHandler} */
 exports.deleteArticle = async (req, res) => {
   try {
     const id = toPositiveInt(req.params.id);
