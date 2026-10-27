@@ -1,22 +1,64 @@
-// Importing required modules for MySQL database connection
 const mysql = require('mysql2');
 require('dotenv').config();
 
-/**
- * Connection Pool Setup:
- * Reuses database connections instead of opening/closing a connection per request.
- * Improves performance, concurrency handling, and system scalability.
- */
+// Returns the first env var that is set.
+function firstDefined(...keys) {
+  for (const key of keys) {
+    const value = process.env[key];
+    if (value !== undefined && value !== '') return value;
+  }
+  return undefined;
+}
+
+// ─── Connection settings (all sourced from the environment) ───
+// same vars work for local MySQL and TiDB Cloud
+const dbHost     = firstDefined('DB_HOST') || 'localhost';
+const dbPort     = Number(firstDefined('DB_PORT') || 3306);
+const dbUser     = firstDefined('DB_USER') || 'root';
+const dbPassword = firstDefined('DB_PASSWORD') ?? '';
+const dbName     = firstDefined('DB_NAME') || 'personal_blog';
+
+// TiDB Cloud requires TLS 1.2+; set DB_SSL=true to enable.
+const sslEnabled = String(firstDefined('DB_SSL') || '').toLowerCase() === 'true';
+const sslOptions = sslEnabled
+  ? {
+      minVersion: 'TLSv1.2',
+      // only disabled when explicitly configured
+      rejectUnauthorized:
+        String(firstDefined('DB_SSL_REJECT_UNAUTHORIZED') || 'true').toLowerCase() !== 'false',
+      // optional CA certificate
+      ...(process.env.DB_SSL_CA ? { ca: process.env.DB_SSL_CA } : {})
+    }
+  : undefined;
+
+// pool reuses connections instead of opening one per request
 const pool = mysql.createPool({
-  host: process.env.DB_HOST || 'localhost',
-  port: process.env.DB_PORT ? Number(process.env.DB_PORT) : 3306,
-  user: process.env.DB_USER || 'root',
-  password: process.env.DB_PASSWORD || '',
-  database: process.env.DB_NAME || 'personal_blog',
+  host: dbHost,
+  port: dbPort,
+  user: dbUser,
+  password: dbPassword,
+  database: dbName,
   waitForConnections: true,
-  connectionLimit: 10,
-  queueLimit: 0
+  connectionLimit: Number(firstDefined('DB_CONNECTION_LIMIT') || 10),
+  queueLimit: 0,
+  // keep idle connections alive
+  enableKeepAlive: true,
+  keepAliveInitialDelay: 10000,
+  charset: 'utf8mb4',
+  // only set when TLS is enabled
+  ...(sslOptions ? { ssl: sslOptions } : {})
 });
 
-// Export promise-enabled pool wrapper for seamless async/await execution
-module.exports = pool.promise();
+const promisePool = pool.promise();
+
+// boot probe: resolves once a connection succeeds
+promisePool.testConnection = async function testConnection() {
+  const connection = await promisePool.getConnection();
+  try {
+    await connection.query('SELECT 1');
+  } finally {
+    connection.release();
+  }
+};
+
+module.exports = promisePool;

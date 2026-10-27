@@ -4,22 +4,189 @@
 ═══════════════════════════════════════════════════════ */
 
 // ─── STATE ──────────────────────────────────────────────
-let currentUserId   = 1;
+// The signed-in user comes from the server session (/api/auth/me).
+let currentUser     = null;
+let csrfToken       = null;     // echoed back on every write request
+let authMode        = 'login';  // 'login' | 'register'
 let articlesData    = [];
 let activeCategory  = 'all';
 let searchQuery     = '';
 let currentArticleId = null;
 let searchDebounce  = null;
 
+// Slideshow state
+let currentSlideIndex = 0;
+let slideInterval     = null;
+
 // ─── INIT ───────────────────────────────────────────────
 document.addEventListener('DOMContentLoaded', async () => {
   initTheme();
   setupNavScroll();
   setupEventListeners();
-  await ensureDefaultUser();
+  await initAuth();
   await loadArticles();
   handleHashNavigation();
+  initSlideshow();
 });
+
+// ─── API HELPER ─────────────────────────────────────────
+// fetch wrapper: sends cookies and CSRF token, refreshes state on 401.
+async function apiFetch(method, path, body) {
+  const headers = {};
+  if (body !== undefined) headers['Content-Type'] = 'application/json';
+  if (!['GET', 'HEAD', 'OPTIONS'].includes(method) && csrfToken) {
+    headers['X-CSRF-Token'] = csrfToken;
+  }
+
+  const res = await fetch(path, {
+    method,
+    headers,
+    credentials: 'same-origin',
+    body: body === undefined ? undefined : JSON.stringify(body)
+  });
+
+  let result = null;
+  try { result = await res.json(); } catch { result = null; }
+
+  if (result && typeof result.csrfToken === 'string') csrfToken = result.csrfToken;
+
+  if (res.status === 401 && currentUser) {
+    // Session gone: refresh the CSRF token for the new session.
+    await initAuth();
+  }
+
+  return { ok: res.ok, status: res.status, result };
+}
+
+// ─── AUTH ───────────────────────────────────────────────
+// Loads the CSRF token and the current session.
+async function initAuth() {
+  try {
+    const res  = await fetch('/api/auth/csrf', { credentials: 'same-origin' });
+    const data = await res.json();
+    if (data && typeof data.csrfToken === 'string') csrfToken = data.csrfToken;
+  } catch (err) {
+    console.warn('Could not obtain a CSRF token:', err);
+  }
+
+  try {
+    const res = await fetch('/api/auth/me', { credentials: 'same-origin' });
+    currentUser = res.ok ? (await res.json()).data : null;
+  } catch (err) {
+    console.warn('Could not load the session:', err);
+    currentUser = null;
+  }
+
+  renderAuthUI();
+}
+
+// Reflects the current session in the nav and auth modal.
+function renderAuthUI() {
+  const signedIn = Boolean(currentUser);
+  const canWrite = signedIn && ['author', 'admin'].includes(currentUser.role);
+
+  const writeBtn = document.getElementById('btn-open-create-modal');
+  if (writeBtn) writeBtn.classList.toggle('hidden', !canWrite);
+
+  const accountBtn = document.getElementById('btn-open-user-modal');
+  if (accountBtn) {
+    accountBtn.textContent = signedIn ? currentUser.username : 'sign in';
+    accountBtn.setAttribute('aria-label', signedIn ? 'Account' : 'Sign in or create an account');
+  }
+
+  const accountView = document.getElementById('auth-account-view');
+  const form        = document.getElementById('user-form');
+  if (accountView) accountView.classList.toggle('hidden', !signedIn);
+  if (form)        form.classList.toggle('hidden', signedIn);
+
+  if (signedIn) {
+    setTextContent('auth-username', currentUser.username);
+    setTextContent('auth-role-hint', `role: ${currentUser.role}`);
+  }
+}
+
+function openAuthModal() {
+  authMode = 'login';
+  setAuthError('');
+  updateAuthModal();
+  document.getElementById('user-modal').classList.add('active');
+}
+
+// Switches the modal between sign-in and register.
+function updateAuthModal() {
+  const isRegister = authMode === 'register';
+
+  document.getElementById('auth-username-group').classList.toggle('hidden', !isRegister);
+  document.getElementById('user-username').required = isRegister;
+
+  setTextContent('user-modal-title', isRegister ? 'join the space ♡' : 'welcome back ♡');
+  setTextContent('create-user-btn',  isRegister ? 'create account' : 'sign in');
+  setTextContent('auth-switch-text', isRegister ? 'already have an account?' : 'new here?');
+  setTextContent('auth-switch-btn',  isRegister ? 'sign in' : 'create an account');
+
+  document.getElementById('user-password').setAttribute(
+    'autocomplete',
+    isRegister ? 'new-password' : 'current-password'
+  );
+}
+
+function setAuthError(message) {
+  const el = document.getElementById('auth-error');
+  if (el) el.textContent = message || '';
+}
+
+// Handles sign-in or registration based on authMode.
+async function handleAuthSubmit(e) {
+  e.preventDefault();
+  if (currentUser) return;
+
+  const isRegister = authMode === 'register';
+  const username   = document.getElementById('user-username').value.trim();
+  const email      = document.getElementById('user-email').value.trim();
+  const password   = document.getElementById('user-password').value;
+
+  const btn = document.getElementById('create-user-btn');
+  btn.disabled = true;
+  setAuthError('');
+
+  try {
+    const path    = isRegister ? '/api/auth/register' : '/api/auth/login';
+    const payload = isRegister ? { username, email, password } : { email, password };
+
+    const { ok, result } = await apiFetch('POST', path, payload);
+
+    if (!ok) {
+      setAuthError((result && result.error) || 'Something went wrong. Please try again.');
+      return;
+    }
+
+    currentUser = result.data;
+    document.getElementById('user-form').reset();
+    document.getElementById('user-modal').classList.remove('active');
+    renderAuthUI();
+    await loadArticles(); // permissions changed, and a fresh database may be seeded
+  } catch (err) {
+    console.error('Authentication failed:', err);
+    setAuthError('Could not reach the server. Please try again.');
+  } finally {
+    btn.disabled = false;
+    updateAuthModal();
+  }
+}
+
+async function signOut() {
+  try {
+    await apiFetch('POST', '/api/auth/logout', {});
+  } catch (err) {
+    console.warn('Sign out request failed:', err);
+  }
+
+  currentUser = null;
+  document.getElementById('user-modal').classList.remove('active');
+  await initAuth();       // the ended session needs a fresh CSRF token
+  await loadArticles();
+}
+
 
 // ─── THEME ──────────────────────────────────────────────
 function initTheme() {
@@ -119,17 +286,34 @@ function setupEventListeners() {
     .addEventListener('click', closeArticleModal);
   document.getElementById('article-form')
     .addEventListener('submit', handleSaveArticle);
+  // Preview the chosen file (it takes priority over the URL field)
+  document.getElementById('article-image-file')
+    .addEventListener('change', handleImageFileChange);
 
-  // User modal
+  // Contact form
+  const contactForm = document.getElementById('contact-form');
+  if (contactForm) {
+    contactForm.addEventListener('submit', handleContactSubmit);
+  }
+
+  // Auth modal (sign in / create account / sign out)
   const userModal = document.getElementById('user-modal');
   document.getElementById('btn-open-user-modal')
-    .addEventListener('click', () => userModal.classList.add('active'));
+    .addEventListener('click', openAuthModal);
   document.getElementById('close-user-modal')
     .addEventListener('click', () => userModal.classList.remove('active'));
   document.getElementById('cancel-user-modal')
     .addEventListener('click', () => userModal.classList.remove('active'));
   document.getElementById('user-form')
-    .addEventListener('submit', handleCreateUser);
+    .addEventListener('submit', handleAuthSubmit);
+  document.getElementById('auth-switch-btn')
+    .addEventListener('click', () => {
+      authMode = authMode === 'register' ? 'login' : 'register';
+      setAuthError('');
+      updateAuthModal();
+    });
+  document.getElementById('auth-signout-btn')
+    .addEventListener('click', signOut);
 
   // Close modals on backdrop click
   document.querySelectorAll('.modal-backdrop').forEach(bd => {
@@ -139,47 +323,23 @@ function setupEventListeners() {
   });
 }
 
-// ─── ENSURE DEFAULT USER ────────────────────────────────
-async function ensureDefaultUser() {
-  try {
-    const res    = await fetch('/api/users');
-    const result = await res.json();
-    if (result.success && result.data?.length > 0) {
-      currentUserId = result.data[0].id;
-      return;
-    }
-    // Create the default "shruti" user
-    const cr = await fetch('/api/users', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ username: 'shruti', email: 'shruti@blog.com', password: 'password123' })
-    });
-    const crResult = await cr.json();
-    if (crResult.success) currentUserId = crResult.id;
-  } catch (err) {
-    console.warn('Could not verify/create default user:', err);
-  }
-}
-
 // ─── LOAD ARTICLES ──────────────────────────────────────
 async function loadArticles() {
   const grid = document.getElementById('articles-grid');
   grid.innerHTML = `<div class="loading-state"><span class="loading-text-cursive cursive">loading stories...</span></div>`;
 
   try {
-    const res    = await fetch('/api/articles');
-    const result = await res.json();
+    const { result } = await apiFetch('GET', '/api/articles');
 
-    if (!result.success) throw new Error(result.error || 'API error');
+    if (!result || !result.success) throw new Error((result && result.error) || 'API error');
 
     articlesData = result.data;
 
-    // Seed default content on a fresh database
-    if (articlesData.length === 0) {
+    // Seed default content only when empty and signed in.
+    if (articlesData.length === 0 && currentUser) {
       await seedDefaultContent();
-      const res2    = await fetch('/api/articles');
-      const result2 = await res2.json();
-      if (result2.success) articlesData = result2.data;
+      const { result: reloaded } = await apiFetch('GET', '/api/articles');
+      if (reloaded && reloaded.success) articlesData = reloaded.data;
     }
 
     renderFilteredArticles();
@@ -444,18 +604,13 @@ And compete. Even if you place badly. Consistent contest participation, done ove
     }
   ];
 
-  // Post all seed articles in parallel
+  // Post all seed articles in parallel.
   await Promise.all(
     articles.map(art =>
-      fetch('/api/articles', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          user_id: currentUserId,
-          title:   art.title,
-          tags:    art.tags,
-          content: art.content
-        })
+      apiFetch('POST', '/api/articles', {
+        title:   art.title,
+        tags:    art.tags,
+        content: art.content
       }).catch(err => console.warn('Error seeding article:', err))
     )
   );
@@ -545,7 +700,8 @@ function renderArticles(articles) {
 
   grid.innerHTML = articles.map(art => {
     const tags     = parseTags(art.tags);
-    const coverImg = getCoverImage(art.tags);
+    // Image priority: image_url, uploaded image_data, legacy coverimg tag
+    const coverImg = art.image_url || art.image_data || getCoverImage(art.tags);
     const category = tags[0] || 'personal';
 
     // Strip markdown markers for plain excerpt
@@ -624,10 +780,9 @@ async function openArticlePage(id) {
   reader.innerHTML = `<div class="reader-loading"><span class="cursive">loading your story...</span></div>`;
 
   try {
-    const res    = await fetch(`/api/articles/${id}`);
-    const result = await res.json();
+    const { result } = await apiFetch('GET', `/api/articles/${id}`);
 
-    if (!result.success) {
+    if (!result || !result.success) {
       reader.innerHTML = `
         <div class="reader-error">
           <p>Couldn't load this article.</p>
@@ -638,7 +793,7 @@ async function openArticlePage(id) {
 
     const art      = result.data;
     const tags     = parseTags(art.tags);
-    const coverImg = getCoverImage(art.tags);
+    const coverImg = art.image_url || art.image_data || getCoverImage(art.tags);
     const category = tags[0] || 'personal';
 
     const date = art.published_at
@@ -653,6 +808,17 @@ async function openArticlePage(id) {
 
     const heroHtml  = coverImg
       ? `<div class="reader-hero-image" style="background-image:url('${coverImg.replace('w=700','w=1200')}')"></div>`
+      : '';
+
+    // Only the author or an admin may edit/delete (enforced by the API too)
+    const canManage = currentUser &&
+      (currentUser.role === 'admin' || currentUser.id === art.user_id);
+
+    const manageHtml = canManage
+      ? `<div class="reader-footer-actions">
+          <button class="btn-ghost-sm" onclick="openEditFromReader(${art.id})" aria-label="Edit post">edit post</button>
+          <button class="btn-ghost-sm danger" onclick="deleteArticleFromReader(${art.id})" aria-label="Delete post">delete</button>
+        </div>`
       : '';
 
     reader.innerHTML = `
@@ -716,10 +882,7 @@ async function openArticlePage(id) {
           </div>
         </div>
 
-        <div class="reader-footer-actions">
-          <button class="btn-ghost-sm" onclick="openEditFromReader(${art.id})" aria-label="Edit post">edit post</button>
-          <button class="btn-ghost-sm danger" onclick="deleteArticleFromReader(${art.id})" aria-label="Delete post">delete</button>
-        </div>
+        ${manageHtml}
       </div>
     `;
 
@@ -813,9 +976,8 @@ function renderInline(text) {
 // ─── LIKES ───────────────────────────────────────────
 async function loadReaderLikes(articleId) {
   try {
-    const res    = await fetch(`/api/likes/article/${articleId}`);
-    const result = await res.json();
-    if (result.success) {
+    const { result } = await apiFetch('GET', `/api/likes/article/${articleId}`);
+    if (result && result.success) {
       const count = result.data.count ?? 0;
       setTextContent('reader-like-count',    count);
       setTextContent('reaction-like-count',  count);
@@ -826,18 +988,20 @@ async function loadReaderLikes(articleId) {
 }
 
 async function toggleReaderLike(articleId) {
+  if (!currentUser) { openAuthModal(); return; }
+
   try {
-    const res    = await fetch('/api/likes/toggle', {
-      method:  'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body:    JSON.stringify({ article_id: articleId, user_id: currentUserId })
-    });
-    const result = await res.json();
-    if (result.success) {
-      document.getElementById('reader-like-btn')?.classList.toggle('liked');
-      document.getElementById('reaction-btn')?.classList.toggle('liked');
-      await loadReaderLikes(articleId);
+    // The liker comes from the session; no user id is sent
+    const { ok, result } = await apiFetch('POST', '/api/likes/toggle', { article_id: articleId });
+
+    if (!ok) {
+      if (result && result.error) alert(result.error);
+      return;
     }
+
+    document.getElementById('reader-like-btn')?.classList.toggle('liked', result.liked);
+    document.getElementById('reaction-btn')?.classList.toggle('liked', result.liked);
+    await loadReaderLikes(articleId);
   } catch (err) {
     console.warn('Error toggling like:', err);
   }
@@ -849,9 +1013,8 @@ async function loadReaderComments(articleId) {
   if (!listEl) return;
 
   try {
-    const res    = await fetch(`/api/comments/article/${articleId}`);
-    const result = await res.json();
-    if (result.success) {
+    const { result } = await apiFetch('GET', `/api/comments/article/${articleId}`);
+    if (result && result.success) {
       if (result.data.length === 0) {
         listEl.innerHTML = `<div class="loading-text">no comments yet — be the first to leave a note ♡</div>`;
       } else {
@@ -873,21 +1036,25 @@ async function postReaderComment(articleId) {
   const btn     = document.getElementById('post-comment-btn');
   if (!inputEl) return;
 
+  if (!currentUser) { openAuthModal(); return; }
+
   const content = inputEl.value.trim();
   if (!content) return;
 
   if (btn) { btn.disabled = true; btn.textContent = '...'; }
 
   try {
-    const res    = await fetch('/api/comments', {
-      method:  'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body:    JSON.stringify({ article_id: articleId, user_id: currentUserId, content })
+    // The commenter comes from the session; no user id is sent
+    const { ok, result } = await apiFetch('POST', '/api/comments', {
+      article_id: articleId,
+      content
     });
-    const result = await res.json();
-    if (result.success) {
+
+    if (ok) {
       inputEl.value = '';
       loadReaderComments(articleId);
+    } else if (result && result.error) {
+      alert(result.error);
     }
   } catch (err) {
     console.warn('Error posting comment:', err);
@@ -898,13 +1065,48 @@ async function postReaderComment(articleId) {
 
 // ─── ARTICLE CRUD ─────────────────────────────────────
 function openArticleModal(article = null) {
-  document.getElementById('article-id').value      = article ? article.id      : '';
-  document.getElementById('article-title').value   = article ? article.title   : '';
-  document.getElementById('article-tags').value    = article ? (article.tags || '') : '';
-  document.getElementById('article-content').value = article ? article.content : '';
+  document.getElementById('article-id').value        = article ? article.id        : '';
+  document.getElementById('article-title').value     = article ? article.title     : '';
+  document.getElementById('article-tags').value      = article ? (article.tags || '') : '';
+  document.getElementById('article-image-url').value = article ? (article.image_url || '') : '';
+  document.getElementById('article-content').value   = article ? article.content   : '';
+
+  // Reset the file picker and preview the article's existing image.
+  const fileInput = document.getElementById('article-image-file');
+  if (fileInput) fileInput.value = '';
+  showImagePreview(article ? (article.image_url || article.image_data) : '');
+
   document.getElementById('modal-title').textContent =
     article ? 'edit your story ✨' : 'write something ✨';
   document.getElementById('article-modal').classList.add('active');
+}
+
+// Shows or hides the image preview.
+function showImagePreview(src) {
+  const preview = document.getElementById('article-image-preview');
+  if (!preview) return;
+  if (src) {
+    preview.src = src;
+    preview.classList.remove('hidden');
+  } else {
+    preview.removeAttribute('src');
+    preview.classList.add('hidden');
+  }
+}
+
+// Previews the picked file and clears the URL field (one image only).
+function handleImageFileChange() {
+  const file = this.files && this.files[0];
+  if (!file) return;
+
+  if (file.size > 5 * 1024 * 1024) {
+    alert('Image is too large — please choose a file under 5MB.');
+    this.value = '';
+    return;
+  }
+
+  document.getElementById('article-image-url').value = '';
+  showImagePreview(URL.createObjectURL(file));
 }
 
 function closeArticleModal() {
@@ -912,36 +1114,61 @@ function closeArticleModal() {
   document.getElementById('article-form').reset();
 }
 
+// Reads a File into a base64 data URL for the image_data column.
+function readImageFileAsDataUrl(file) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload  = () => resolve(reader.result);
+    reader.onerror = () => reject(reader.error);
+    reader.readAsDataURL(file);
+  });
+}
+
 async function handleSaveArticle(e) {
   e.preventDefault();
-  const id      = document.getElementById('article-id').value;
-  const title   = document.getElementById('article-title').value.trim();
-  const tags    = document.getElementById('article-tags').value.trim();
-  const content = document.getElementById('article-content').value.trim();
+
+  // Writing requires a session — prompt to sign in.
+  if (!currentUser) { openAuthModal(); return; }
+
+  const id        = document.getElementById('article-id').value;
+  const title     = document.getElementById('article-title').value.trim();
+  const tags      = document.getElementById('article-tags').value.trim();
+  let   image_url = document.getElementById('article-image-url').value.trim();
+  const content   = document.getElementById('article-content').value.trim();
+
+  const fileInput = document.getElementById('article-image-file');
+  const file      = fileInput && fileInput.files ? fileInput.files[0] : null;
+
+  if (file && file.size > 5 * 1024 * 1024) {
+    alert('Image is too large — please choose a file under 5MB.');
+    return;
+  }
 
   const btn     = document.getElementById('save-article-btn');
   btn.textContent = 'publishing...';
   btn.disabled    = true;
 
   try {
-    const method  = id ? 'PUT'  : 'POST';
-    const url     = id ? `/api/articles/${id}` : '/api/articles';
-    const payload = { user_id: currentUserId, title, tags, content };
+    // An uploaded file becomes image_data and overrides the URL field.
+    let image_data;
+    if (file) {
+      image_data = await readImageFileAsDataUrl(file);
+      image_url = '';
+    }
 
-    const res    = await fetch(url, {
-      method,
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(payload)
-    });
-    const result = await res.json();
+    const method = id ? 'PUT' : 'POST';
+    const url    = id ? `/api/articles/${id}` : '/api/articles';
 
-    if (result.success) {
+    // The author comes from the session; no user id is sent.
+    const { ok, result } = await apiFetch(method, url, { title, tags, image_url, image_data, content });
+
+    if (ok && result && result.success) {
       closeArticleModal();
       await loadArticles();
       // Re-open reader if we just edited an open article
       if (id) openArticlePage(parseInt(id, 10));
     } else {
-      alert('Error saving: ' + result.error);
+      alert('Error saving: ' + ((result && result.error) || 'request failed'));
     }
   } catch (err) {
     console.error('Failed to save article:', err);
@@ -952,79 +1179,62 @@ async function handleSaveArticle(e) {
   }
 }
 
-function openEditFromReader(articleId) {
+async function openEditFromReader(articleId) {
   const article = articlesData.find(a => a.id === articleId);
   if (article) {
     openArticleModal(article);
-  } else {
-    fetch(`/api/articles/${articleId}`)
-      .then(r => r.json())
-      .then(result => { if (result.success) openArticleModal(result.data); });
+    return;
   }
+
+  const { result } = await apiFetch('GET', `/api/articles/${articleId}`);
+  if (result && result.success) openArticleModal(result.data);
 }
 
 async function deleteArticleFromReader(id) {
   if (!confirm('Delete this post? This cannot be undone. ♡')) return;
   try {
-    const res    = await fetch(`/api/articles/${id}`, { method: 'DELETE' });
-    const result = await res.json();
-    if (result.success) {
+    const { ok, result } = await apiFetch('DELETE', `/api/articles/${id}`);
+    if (ok && result && result.success) {
       closeArticlePage();
       await loadArticles();
     } else {
-      alert('Failed to delete: ' + result.error);
+      alert('Failed to delete: ' + ((result && result.error) || 'request failed'));
     }
   } catch (err) {
     console.error('Failed to delete:', err);
   }
 }
 
-// ─── USER ────────────────────────────────────────────
-async function handleCreateUser(e) {
+// ─── CONTACT FORM ──────────────────────────────────────
+async function handleContactSubmit(e) {
   e.preventDefault();
-  const username = document.getElementById('user-username').value.trim();
-  const email    = document.getElementById('user-email').value.trim();
-  const password = document.getElementById('user-password').value;
+  
+  const form = e.target;
+  const loading = document.getElementById('contact-loading');
+  const error = document.getElementById('contact-error');
+  const success = document.getElementById('contact-success');
+  const submitBtn = form.querySelector('button[type="submit"]');
 
-  const btn = document.getElementById('create-user-btn');
-  btn.textContent = 'creating...';
-  btn.disabled    = true;
+  // Reset status
+  loading.classList.remove('hidden');
+  error.classList.add('hidden');
+  success.classList.add('hidden');
+  submitBtn.disabled = true;
 
   try {
-    const res    = await fetch('/api/users', {
-      method:  'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ username, email, password })
-    });
-    const result = await res.json();
-    if (result.success) {
-      currentUserId = result.id;
-      document.getElementById('user-modal').classList.remove('active');
-      document.getElementById('user-form').reset();
-    } else {
-      alert('Error: ' + result.error);
-    }
-  } catch (err) {
-    console.error('Failed to create user:', err);
-  } finally {
-    btn.textContent = 'create account';
-    btn.disabled    = false;
-  }
-}
+    // Send the contact form via EmailJS.
+    await emailjs.sendForm('service_dt4km5i', 'template_1m9p8rp', form);
 
-// ─── NEWSLETTER ───────────────────────────────────────
-function handleNewsletterSubmit(e) {
-  e.preventDefault();
-  const input = e.target.querySelector('input');
-  const btn   = document.getElementById('newsletter-submit-btn');
-  if (!btn) return;
-  btn.textContent = 'subscribed ♡';
-  btn.disabled    = true;
-  if (input) input.value = '';
-  setTimeout(() => {
-    btn.textContent = 'subscribe';
-    btn.disabled    = false;
-  }, 3500);
+    success.classList.remove('hidden');
+    form.reset();
+  } catch (err) {
+    console.error('EmailJS Error:', err);
+    error.textContent = 'Oops! Something went wrong. Please try again later. ♡';
+    error.classList.remove('hidden');
+  } finally {
+    loading.classList.add('hidden');
+    submitBtn.disabled = false;
+  }
 }
 
 // ─── UTILS ────────────────────────────────────────────
@@ -1038,4 +1248,36 @@ function escapeHtml(str) {
 function setTextContent(id, value) {
   const el = document.getElementById(id);
   if (el) el.textContent = value;
+}
+
+// ─── SLIDESHOW ────────────────────────────────────────
+function initSlideshow() {
+  const slides = document.getElementsByClassName('intro-slide');
+  if (slides.length <= 1) return;
+
+  startSlideTimer();
+}
+
+function startSlideTimer() {
+  stopSlideTimer();
+  slideInterval = setInterval(() => moveSlide(1), 3000);
+}
+
+function stopSlideTimer() {
+  if (slideInterval) clearInterval(slideInterval);
+}
+
+function moveSlide(n) {
+  const slides = document.getElementsByClassName('intro-slide');
+  if (slides.length === 0) return;
+
+  slides[currentSlideIndex].classList.remove('active');
+
+  // Move to the next slide, wrapping around
+  currentSlideIndex = (currentSlideIndex + n + slides.length) % slides.length;
+
+  slides[currentSlideIndex].classList.add('active');
+
+  // Restart the timer after a manual move
+  startSlideTimer();
 }

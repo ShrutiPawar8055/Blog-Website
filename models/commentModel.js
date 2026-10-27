@@ -1,16 +1,9 @@
 // Importing the MySQL connection pool
 const db = require('../config/dbConfig');
 
-/**
- * Comment Model
- * Handles database operations for the 'comments' table.
- */
+// Handles database operations for comments.
 class Comment {
-  /**
-   * Fetch all comments for a specific article, including commenter username
-   * @param {number} articleId - Article ID
-   * @returns {Promise<Array>} List of comments
-   */
+  // Fetch all comments for an article.
   static async getCommentsByArticleId(articleId) {
     const [rows] = await db.execute(
       `SELECT 
@@ -29,11 +22,19 @@ class Comment {
     return rows;
   }
 
-  /**
-   * Insert a new comment on an article
-   * @param {Object} data - { article_id, user_id, content }
-   * @returns {Promise<number>} Inserted comment ID
-   */
+  // Fetch one comment plus its article's author, for auth checks.
+  static async getCommentById(id) {
+    const [rows] = await db.execute(
+      `SELECT c.id, c.user_id, c.article_id, a.user_id AS article_user_id
+       FROM comments c
+       JOIN articles a ON c.article_id = a.id
+       WHERE c.id = ?`,
+      [id]
+    );
+    return rows[0] || null;
+  }
+
+  // Insert a new comment and return its id.
   static async createComment(data) {
     const { article_id, user_id, content } = data;
 
@@ -46,10 +47,7 @@ class Comment {
     return result.insertId;
   }
 
-  /**
-   * Delete a comment by ID
-   * @param {number} id - Comment ID
-   */
+  // Delete a comment by id.
   static async deleteComment(id) {
     await db.execute('DELETE FROM comments WHERE id = ?', [id]);
   }

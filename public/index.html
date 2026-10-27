@@ -4,7 +4,9 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <meta name="description" content="Shruti's personal blog — real life, messy mind, big dreams. Thoughts on productivity, daily routines, skincare, health, and coding.">
-  <title>shruti. — real life. messy mind. big dreams.</title>
+  <meta property="og:image" content="https://i.pinimg.com/1200x/e1/e8/28/e1e828067c6f837db7664ee0545a6c5e.jpg">
+  <link rel="icon" href="https://i.pinimg.com/1200x/e1/e8/28/e1e828067c6f837db7664ee0545a6c5e.jpg">
+  <title>shruti</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Dancing+Script:wght@400;500;600;700&family=Lato:ital,wght@0,300;0,400;0,700;1,300;1,400&display=swap" rel="stylesheet">
@@ -65,13 +67,15 @@
     <!-- INTRO -->
     <section class="intro-section" aria-label="About me">
       <div class="intro-image-wrap">
-        <img
-          src="https://images.unsplash.com/photo-1522202176988-66273c2fd55f?w=700&q=80&auto=format&fit=crop"
-          alt="A cozy, creative study setup with warm lighting"
-          class="intro-image"
-          loading="lazy"
-          onerror="this.parentElement.style.background='var(--accent-light)'"
-        >
+        <div class="intro-slideshow">
+          <div class="slides-container">
+            <img src="/images/intro-image.jpeg" alt="Intro slide 1" class="intro-slide active" loading="lazy" onerror="this.style.display='none'">
+            <img src="/images/intro-image2.jpeg" alt="Intro slide 2" class="intro-slide" loading="lazy" onerror="this.style.display='none'">
+            <img src="/images/intro-image3.jpeg" alt="Intro slide 3" class="intro-slide" loading="lazy" onerror="this.style.display='none'">
+          </div>
+          <button class="slide-arrow prev" onclick="moveSlide(-1)" aria-label="Previous slide">❮</button>
+          <button class="slide-arrow next" onclick="moveSlide(1)" aria-label="Next slide">❯</button>
+        </div>
       </div>
       <div class="intro-text-wrap">
         <div class="intro-card">
@@ -125,7 +129,7 @@
         <h2 class="section-title cursive">latest posts</h2>
         <div class="blog-controls">
           <span class="article-count-label">(<span id="article-count">0</span> posts)</span>
-          <button class="btn-accent-sm" id="btn-open-user-modal" aria-label="Create new user account">+ new user</button>
+          <button class="btn-accent-sm" id="btn-open-user-modal" aria-label="Sign in or create an account">sign in</button>
         </div>
       </div>
 
@@ -136,18 +140,83 @@
       </div>
     </section>
 
+    <!-- CONTACT SECTION -->
+    <section id="contact" class="contact-section">
+      <div class="contact-container">
+        <div class="contact-header">
+          <h2 class="section-title cursive">get in touch</h2>
+          <p class="section-subtitle">I'd love to hear from you. ♡</p>
+        </div>
+
+        <div class="contact-content">
+          <div class="contact-info">
+            <div class="info-item">
+              <div class="info-icon">✉️</div>
+              <div>
+                <h3>Email</h3>
+                <p>shrutikeshavpawar@gmail.com</p>
+              </div>
+            </div>
+            <div class="info-item">
+              <div class="info-icon">✨</div>
+              <div>
+                <h3>Socials</h3>
+                <p>Find me on Instagram or LinkedIn. ♡</p>
+              </div>
+            </div>
+            <div class="contact-image-card">
+              <img
+                src="/images/contact%20me%20image.jpeg"
+                alt="Contact illustration"
+                class="contact-image"
+                loading="lazy"
+              >
+            </div>
+          </div>
+
+          <div class="contact-form-wrap">
+            <form id="contact-form" class="contact-form">
+              <div class="form-row">
+                <div class="form-group">
+                  <label for="name-field">Your Name</label>
+                  <input type="text" name="name" id="name-field" required placeholder="what's your name?">
+                </div>
+                <div class="form-group">
+                  <label for="email-field">Your Email</label>
+                  <input type="email" name="email" id="email-field" required placeholder="you@email.com">
+                </div>
+              </div>
+              <div class="form-group">
+                <label for="subject-field">Subject</label>
+                <input type="text" name="subject" id="subject-field" required placeholder="what's it about?">
+              </div>
+              <div class="form-group">
+                <label for="message-field">Message</label>
+                <textarea name="message" id="message-field" rows="6" required placeholder="tell me everything..."></textarea>
+              </div>
+              <div class="form-status">
+                <div id="contact-loading" class="hidden">sending your note...</div>
+                <div id="contact-error" class="error-message hidden"></div>
+                <div id="contact-success" class="sent-message hidden">Your message has been sent. Thank you! ♡</div>
+              </div>
+              <button type="submit" class="btn-accent-filled">Send Message</button>
+            </form>
+          </div>
+        </div>
+      </div>
+    </section>
+
     <!-- FOOTER -->
     <footer class="site-footer" id="footer-section" role="contentinfo">
       <div class="footer-left">
         <p class="footer-tagline cursive">chaos is part of<br>the process ♡</p>
       </div>
-      <div class="footer-right">
-        <p class="footer-newsletter-label">LET'S BE INTERNET FRIENDS</p>
-        <p class="footer-newsletter-sub">get little notes from me in your inbox</p>
-        <form class="newsletter-form" onsubmit="handleNewsletterSubmit(event)" aria-label="Newsletter signup">
-          <input type="email" id="newsletter-email" placeholder="you@email.com" class="newsletter-input" required aria-label="Your email address">
-          <button type="submit" class="btn-accent-filled" id="newsletter-submit-btn">subscribe</button>
-        </form>
+      <div class="footer-bottom-note">
+        <p class="note-header">A NOTE FROM US</p>
+        <p>Thank you for being here.<br>
+        Every story shared, every thought expressed, and every moment spent reading makes this little corner of the internet special.</p>
+        <p>Your words matter. Your stories matter. And we're grateful you're part of this journey.</p>
+        <p class="copyright-note">copywrite @ShrutiPawar</p>
       </div>
     </footer>
 
@@ -179,6 +248,17 @@
           <input type="text" id="article-tags" placeholder="lifestyle, personal, thoughts">
         </div>
         <div class="form-group">
+          <label for="article-image-url">image url</label>
+          <input type="url" id="article-image-url" placeholder="https://example.com/image.jpg">
+          <span class="label-hint">Provide a direct link to an image (optional)</span>
+        </div>
+        <div class="form-group">
+          <label for="article-image-file">or upload an image</label>
+          <input type="file" id="article-image-file" accept="image/png,image/jpeg,image/gif,image/webp">
+          <span class="label-hint">Pick a file (max 5MB) — stored with the post (optional)</span>
+          <img id="article-image-preview" class="image-preview hidden" alt="Selected image preview">
+        </div>
+        <div class="form-group">
           <label for="article-content">content <span class="required-star">*</span></label>
           <textarea id="article-content" rows="9" required placeholder="Write your story here... Use double line breaks between paragraphs, and **text** for bold headings."></textarea>
         </div>
@@ -190,17 +270,28 @@
     </div>
   </div>
 
-  <!-- ═══════════ USER MODAL ═══════════ -->
+  <!-- ═══════════ AUTH MODAL (sign in / create account) ═══════════ -->
   <div class="modal-backdrop" id="user-modal" role="dialog" aria-modal="true" aria-labelledby="user-modal-title">
     <div class="modal-content">
       <div class="modal-header">
-        <h3 class="cursive" id="user-modal-title">join the space ♡</h3>
+        <h3 class="cursive" id="user-modal-title">welcome back ♡</h3>
         <button class="close-btn" id="close-user-modal" aria-label="Close modal">✕</button>
       </div>
+
+      <!-- Shown when someone is already signed in -->
+      <div id="auth-account-view" class="hidden">
+        <p class="auth-signed-in">signed in as <strong id="auth-username">—</strong></p>
+        <p class="auth-role-hint" id="auth-role-hint"></p>
+        <div class="modal-footer">
+          <button type="button" class="btn-ghost-modal" id="auth-signout-btn">sign out</button>
+        </div>
+      </div>
+
+      <!-- Sign in / register form -->
       <form id="user-form" novalidate>
-        <div class="form-group">
+        <div class="form-group hidden" id="auth-username-group">
           <label for="user-username">username <span class="required-star">*</span></label>
-          <input type="text" id="user-username" required placeholder="your name here" autocomplete="username">
+          <input type="text" id="user-username" placeholder="your name here" autocomplete="username">
         </div>
         <div class="form-group">
           <label for="user-email">email <span class="required-star">*</span></label>
@@ -208,16 +299,32 @@
         </div>
         <div class="form-group">
           <label for="user-password">password <span class="required-star">*</span></label>
-          <input type="password" id="user-password" required placeholder="••••••••" autocomplete="new-password">
+          <input type="password" id="user-password" required placeholder="••••••••" autocomplete="current-password">
         </div>
+
+        <p class="auth-error" id="auth-error" role="alert"></p>
+
         <div class="modal-footer">
           <button type="button" class="btn-ghost-modal" id="cancel-user-modal">cancel</button>
-          <button type="submit" class="btn-accent-filled" id="create-user-btn">create account</button>
+          <button type="submit" class="btn-accent-filled" id="create-user-btn">sign in</button>
         </div>
+
+        <p class="auth-switch">
+          <span id="auth-switch-text">new here?</span>
+          <button type="button" class="link-btn" id="auth-switch-btn">create an account</button>
+        </p>
       </form>
     </div>
   </div>
 
+  <script type="text/javascript" src="https://cdn.jsdelivr.net/npm/@emailjs/browser@4/dist/email.min.js"></script>
+  <script type="text/javascript">
+    (function(){
+      emailjs.init({
+        publicKey: "flBqn1fQMHRcLqLne",
+      });
+    })();
+  </script>
   <script src="app.js"></script>
 </body>
 </html>

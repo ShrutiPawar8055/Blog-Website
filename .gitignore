@@ -1,3 +1,37 @@
+# ── Dependencies ──
 /node
 /node_modules
-/.env
+/.npm-cache
+
+# ── Secrets & environment ──
+.env
+.env.*
+!.env.example
+
+# ── Certificates & keys (private) ──
+*.pem
+*.key
+*.crt
+*.p12
+*.pfx
+
+# ── Database dumps / exports (never commit real data) ──
+# (schema files under scripts/ are safe to commit; export them into /dumps)
+/dumps
+/backups
+mysql-data
+*.dump
+
+# ── Logs ──
+*.log
+npm-debug.log*
+logs
+
+# ── OS / editor ──
+.DS_Store
+Thumbs.db
+.idea
+.vscode
+
+# ── Stray local artifacts (not part of the project) ──
+danglingptr
